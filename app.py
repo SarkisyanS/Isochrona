@@ -25,15 +25,21 @@ def inject_styles():
         <style>
         /* Global background and typography */
         @import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Sora:wght@400;600&display=swap');
-        .stApp, .stApp * {
-            font-family: "Russo One", "Sora", system-ui, -apple-system, sans-serif !important;
-            font-weight: 200;
-        }
         .stApp {
             background: radial-gradient(120% 120% at 10% 20%, #0f172a 0%, #0b1020 45%, #050913 100%);
             color: #e2e8f0;
+            font-family: "Russo One", "Sora", system-ui, -apple-system, sans-serif;
+        }
+        body, p, span, label, input, textarea, button, select, option, li, h1, h2, h3, h4, h5 {
+            font-family: "Russo One", "Sora", system-ui, -apple-system, sans-serif !important;
+            font-weight: 200;
         }
         h1, h2, h3, h4 {
+            font-weight: 400;
+        }
+        /* Keep icon fonts intact (e.g., expanders/arrows) */
+        [data-baseweb="icon"], .material-icons {
+            font-family: "Material Icons" !important;
             font-weight: 400;
         }
         .block-container {
@@ -134,9 +140,10 @@ def main():
 
     with st.container():
         points_file = st.file_uploader(
-            "",
+            "Upload point layer",
             type=["geojson", "json", "gpkg"],
             key="points_uploader",
+            label_visibility="collapsed",
         )
 
     points_gdf = None
@@ -151,9 +158,10 @@ def main():
     st.header("Step 2 – Provide roads")
 
     road_source = st.radio(
-        "",
+        "Road source",
         options=["Download from OSM", "Upload your own road file"],
         horizontal=True,
+        label_visibility="collapsed",
     )
 
     roads_gdf = None
@@ -442,8 +450,7 @@ def main():
                     mime="application/geo+json",
                 )
 
-                with st.expander("Preview attribute table", expanded=False):
-                    preview_gdf(iso_wgs84, title="Isochrones (attributes)")
+                preview_gdf(iso_wgs84, title="Isochrones (attributes)")
 
             except Exception as e:
                 st.error(f"Error during isochrone computation: {e}")

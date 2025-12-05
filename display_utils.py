@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 
@@ -10,8 +11,12 @@ def preview_gdf(gdf, n=5, title=None):
         return
 
     df = gdf.head(n).copy()
-    if "geometry" in df.columns:
-        df["geometry"] = df["geometry"].astype("string")
+    if hasattr(df, "geometry") and df.geometry.name in df.columns:
+        geom_col = df.geometry.name
+        df = pd.DataFrame(df)  # drop GeoDataFrame geometry semantics
+        df[geom_col] = df[geom_col].apply(lambda g: g.wkt if g is not None else None)
+    else:
+        df = pd.DataFrame(df)
     if title:
         st.caption(title)
     st.dataframe(df)

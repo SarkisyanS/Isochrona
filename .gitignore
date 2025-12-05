@@ -10,6 +10,9 @@ __pycache__/
 
 # Streamlit cache
 .streamlit/
+cache/
+graph_cache/
+.pytest_cache/
 
 # Logs
 *.log
@@ -21,3 +24,11 @@ __pycache__/
 # MacOS
 .DS_Store
 
+# IDE
+.vscode/
+.idea/
+
+# Packaging artifacts
+*.egg-info/
+dist/
+build/
