@@ -22,7 +22,7 @@ def compute_isochrones_for_distance(
     crs_metric,
     boundary_mode="buffer",
     alpha_value=None,
-    quiet=True,
+    quiet=False,
     log_every=50,
     warn_buffer_size=10,
 ):
@@ -82,8 +82,7 @@ def compute_isochrones_for_distance(
         )
     contours = []
     total = len(points_gdf)
-    progress = None if quiet else st.progress(0.0)
-    status = None if quiet else st.empty()
+    iso_progress = None if quiet else st.progress(0.0)
     warnings = []
 
     def flush_warnings():
@@ -96,21 +95,14 @@ def compute_isochrones_for_distance(
     for i, pt in enumerate(points_gdf.geometry):
         contour = make_isochrone_contour(pt, i, warnings)
         contours.append(contour)
+        if iso_progress is not None and total > 0:
+            iso_progress.progress(float(i + 1) / float(total))
         if (i + 1) % log_every == 0 or i == total - 1:
-            frac = float(i + 1) / float(total)
-            if progress is not None:
-                progress.progress(frac)
-            if status is not None:
-                status.text(
-                    f"Distance {iso_dist_m} m: processed {i + 1}/{total} points "
-                    f"({int(frac * 100)}%)"
-                )
             flush_warnings()
 
     flush_warnings()
-
-    if status is not None:
-        status.text(f"Distance {iso_dist_m} m: finished.")
+    if iso_progress is not None:
+        iso_progress.progress(1.0)
 
     geom_col = points_gdf.geometry.name if hasattr(points_gdf, "geometry") else "geometry"
     base_df = pd.DataFrame(points_gdf).drop(columns=[geom_col], errors="ignore")
@@ -142,7 +134,7 @@ def compute_multi_distance_isochrones(
     crs_metric,
     boundary_mode="buffer",
     alpha_value=None,
-    quiet=True,
+    quiet=False,
     log_every=50,
     warn_buffer_size=10,
 ):
@@ -177,13 +169,12 @@ def compute_multi_distance_isochrones(
     total_d = len(distances_sorted)
     if not quiet:
         st.write("Computing isochrones for all distance bands...")
-    outer_progress = None if quiet else st.progress(0.0)
-    outer_status = None if quiet else st.empty()
-    iso_progress = None if quiet else st.progress(0.0)
-
+    outer_progress = None
+    outer_status = None
     total_points = len(points_gdf)
-    per_point_progress = None if quiet else st.progress(0.0)
-    per_point_status = None if quiet else st.empty()
+    iso_progress = None if quiet else st.progress(0.0)
+    iso_completed = 0
+    total_iso = max(1, total_points * total_d)
     warnings = []
 
     def flush_warnings():
@@ -205,8 +196,6 @@ def compute_multi_distance_isochrones(
         return node_keys[int(idx)]
 
     max_dist = max(distances_sorted)
-    iso_completed = 0
-    total_iso = max(1, total_points * total_d)
 
     for i, pt in enumerate(points_gdf.geometry):
         try:
@@ -264,23 +253,11 @@ def compute_multi_distance_isochrones(
                 iso_progress.progress(iso_completed / total_iso)
 
         if (i + 1) % log_every == 0 or i == total_points - 1:
-            frac = float(i + 1) / float(total_points)
-            if per_point_progress is not None:
-                per_point_progress.progress(frac)
-            if per_point_status is not None:
-                per_point_status.text(
-                    f"Processed {i + 1}/{total_points} points across {total_d} distance bands "
-                    f"({int(frac * 100)}%)"
-                )
             flush_warnings()
 
     flush_warnings()
-
-    if per_point_status is not None:
-        per_point_status.text("All points processed for all distance bands.")
     if iso_progress is not None:
         iso_progress.progress(1.0)
-
     base_df = pd.DataFrame(points_gdf).drop(
         columns=[points_gdf.geometry.name], errors="ignore"
     )
@@ -295,11 +272,6 @@ def compute_multi_distance_isochrones(
         iso_gdf["dist_m"] = d
         if len(iso_gdf) > 0:
             all_results.append(iso_gdf)
-        if outer_progress is not None:
-            outer_progress.progress(float(distances_sorted.index(d) + 1) / float(total_d))
-
-    if outer_status is not None:
-        outer_status.text("All distance bands completed.")
 
     if not all_results:
         base_cols = list(points_gdf.columns)

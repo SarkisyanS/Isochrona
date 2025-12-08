@@ -134,6 +134,11 @@ def inject_styles():
         .stDataFrame, .stDataFrame [role="table"] {
             color: #e2e8f0;
         }
+        .section-gap {
+            margin: 1.6rem 0 1rem;
+            border-top: 1px solid #1f2937;
+            opacity: 0.75;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -171,6 +176,8 @@ def main():
         except Exception as e:
             st.error(f"Error reading point file: {e}")
 
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+
     st.header("Step 2 – Provide roads")
 
     road_source = st.radio(
@@ -207,7 +214,7 @@ def main():
             value=crs_metric_default,
         )
 
-        if st.button("Download and prepare OSM roads"):
+        if st.button("Download roads"):
             regions = [r.strip() for r in regions_text.splitlines() if r.strip()]
             if not regions:
                 st.error("Please specify at least one region.")
@@ -259,7 +266,7 @@ def main():
     graph_data = st.session_state.get("graph_data", None)
 
     if roads_gdf is not None:
-        if st.button("Build graph from current roads"):
+        if st.button("Build graph using current roads"):
             try:
                 roads_metric = roads_gdf.to_crs(crs_metric)
                 G, kdtree, node_keys = build_graph_from_roads(roads_metric)
@@ -283,6 +290,8 @@ def main():
                 f"Cached graph: {graph_data.get('nodes', 0)} nodes, "
                 f"{graph_data.get('edges', 0)} edges (CRS: {graph_data.get('crs')})"
             )
+
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 
     st.header("Step 3 – Isochrone parameters")
 
@@ -350,6 +359,8 @@ def main():
     except Exception:
         distances_m = []
         st.error("Could not parse distances. Please enter integers separated by commas.")
+
+    st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 
     st.header("Step 4 – Run isochrones")
 
