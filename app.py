@@ -82,11 +82,27 @@ def inject_styles():
             max-width: none;
         }
         .stNumberInput input, .stTextInput input, textarea {
-            background: #0b1220;
+            background: #1f2937;
             color: #e2e8f0;
             border-radius: 10px;
-            border: 1px solid #1f2937;
+            border: 1px solid #2b3545;
             width: 100%;
+        }
+        .stSelectbox div[data-baseweb="select"] {
+            background: #1f2937;
+            border: 1px solid #2b3545;
+            border-radius: 10px;
+            color: #e2e8f0;
+        }
+        .stSelectbox div[data-baseweb="popover"], .stSelectbox [data-baseweb="menu"] {
+            background: #1f2937;
+            border: 1px solid #2b3545;
+            color: #e2e8f0;
+        }
+        .stTextArea textarea {
+            background: #1f2937 !important;
+            border: 1px solid #2b3545 !important;
+            color: #e2e8f0;
         }
         /* Spinner buttons */
         .stNumberInput button[aria-label="Decrease value"] {
