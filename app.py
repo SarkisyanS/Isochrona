@@ -2,6 +2,8 @@ import json
 import sys
 from pathlib import Path
 
+import geopandas as gpd
+import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
@@ -25,33 +27,58 @@ def inject_styles():
         <style>
         /* Global background and typography */
         @import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Sora:wght@400;600&display=swap');
+        @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0");
+
         .stApp {
             background: radial-gradient(120% 120% at 10% 20%, #0f172a 0%, #0b1020 45%, #050913 100%);
             color: #e2e8f0;
             font-family: "Russo One", "Sora", system-ui, -apple-system, sans-serif;
         }
-        body, p, span, label, input, textarea, button, select, option, li, h1, h2, h3, h4, h5 {
+
+        /*
+          IMPORTANT:
+          Do NOT apply your custom font to all spans.
+          Streamlit/BaseWeb icons often render as ligature text (e.g. "expand_more") inside spans.
+          If you force a non-icon font on spans, you'll see the raw text instead of the icon.
+        */
+        body, p, label, input, textarea, button, select, option, li, h1, h2, h3, h4, h5 {
             font-family: "Russo One", "Sora", system-ui, -apple-system, sans-serif !important;
             font-weight: 200;
         }
+
         h1, h2, h3, h4 {
             font-weight: 400;
+            color: #f8fafc;
+            letter-spacing: 0.01em;
         }
-        /* Keep icon fonts intact (e.g., expanders/arrows) */
-        [data-baseweb="icon"], .material-icons {
-            font-family: "Material Icons" !important;
-            font-weight: 400;
+
+        /* Keep icon fonts intact (BaseWeb + Material Symbols ligatures) */
+        .material-icons,
+        .material-symbols-outlined,
+        .material-symbols-rounded,
+        .material-symbols-sharp,
+        [data-baseweb="icon"] {
+            font-family: "Material Symbols Outlined" !important;
+            font-weight: 400 !important;
+            font-style: normal;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: "liga";
+            -webkit-font-smoothing: antialiased;
         }
+
         .block-container {
             padding: 2.5rem 2.5rem 3rem;
             max-width: 900px;
             margin-left: auto;
             margin-right: auto;
         }
-        h1, h2, h3, h4 {
-            color: #f8fafc;
-            letter-spacing: 0.01em;
-        }
+
         /* Cards */
         .step-card {
             background: #101827;
@@ -60,6 +87,7 @@ def inject_styles():
             padding: 1.1rem 1.25rem;
             box-shadow: 0 12px 30px rgba(0,0,0,0.25);
         }
+
         /* Buttons */
         .stButton>button {
             background: linear-gradient(90deg, #0ea5e9, #7c3aed);
@@ -76,6 +104,7 @@ def inject_styles():
             transform: translateY(-1px);
             box-shadow: 0 12px 30px rgba(14,165,233,0.35);
         }
+
         /* Inputs */
         .stFileUploader, .stNumberInput, .stTextInput, .stSelectbox, .stRadio, .stTextArea {
             width: 100%;
@@ -104,6 +133,7 @@ def inject_styles():
             border: 1px solid #2b3545 !important;
             color: #e2e8f0;
         }
+
         /* Spinner buttons */
         .stNumberInput button[aria-label="Decrease value"] {
             background: #ef4444;
@@ -121,19 +151,23 @@ def inject_styles():
         .stNumberInput button[aria-label="Increase value"]:hover {
             filter: brightness(0.95);
         }
+
         label, .stSelectbox div[data-baseweb="select"] {
             width: auto !important;
         }
+
         /* Expander */
         details {
             background: #0d1524;
             border-radius: 10px;
             border: 1px solid #1f2937;
         }
+
         /* Table preview */
         .stDataFrame, .stDataFrame [role="table"] {
             color: #e2e8f0;
         }
+
         .section-gap {
             margin: 1.6rem 0 1rem;
             border-top: 1px solid #1f2937;
@@ -143,6 +177,28 @@ def inject_styles():
         """,
         unsafe_allow_html=True,
     )
+
+
+def guess_column_index(columns, keywords):
+    """Return index of first column whose normalized name matches any keyword."""
+    normalized = [c.strip().lower().replace(" ", "") for c in columns]
+    for idx, name in enumerate(normalized):
+        for kw in keywords:
+            if name == kw or name.endswith(f"_{kw}") or kw in name:
+                return idx
+    return None
+
+
+def points_from_csv(df, lat_col, lon_col, crs="EPSG:4326"):
+    df_numeric = df.copy()
+    df_numeric[lat_col] = pd.to_numeric(df_numeric[lat_col], errors="coerce")
+    df_numeric[lon_col] = pd.to_numeric(df_numeric[lon_col], errors="coerce")
+    cleaned = df_numeric.dropna(subset=[lat_col, lon_col])
+    if cleaned.empty:
+        raise ValueError("No rows with valid numeric latitude/longitude values.")
+
+    geometry = gpd.points_from_xy(cleaned[lon_col], cleaned[lat_col])
+    return gpd.GeoDataFrame(cleaned, geometry=geometry, crs=crs)
 
 
 def main():
@@ -157,22 +213,67 @@ def main():
         unsafe_allow_html=True,
     )
 
-    st.header("Step 1 – Upload point layer (origins)")
+    st.header("Step 1 – Upload point layer")
 
     with st.container():
         points_file = st.file_uploader(
             "Upload point layer",
-            type=["geojson", "json", "gpkg"],
+            type=["geojson", "json", "gpkg", "csv"],
             key="points_uploader",
             label_visibility="collapsed",
+            help="Supports GeoJSON/GPKG or CSV with latitude/longitude columns.",
         )
 
     points_gdf = None
     if points_file is not None:
+        suffix = Path(points_file.name).suffix.lower()
         try:
-            points_gdf = read_vector_file(points_file)
-            st.success(f"Point layer loaded with {len(points_gdf)} features.")
-            preview_gdf(points_gdf, title="Points preview")
+            if suffix in [".csv"]:
+                df = pd.read_csv(points_file)
+                if df.empty:
+                    st.error("CSV appears to be empty.")
+                else:
+                    cols = list(df.columns)
+                    if len(cols) < 2:
+                        st.error("CSV must have at least two columns for latitude and longitude.")
+                    else:
+                        lat_guess = guess_column_index(cols, ["lat", "latt", "latitude", "y"])
+                        lon_guess = guess_column_index(cols, ["lon", "lng", "long", "longitude", "x"])
+                        lat_default = lat_guess if lat_guess is not None else 0
+                        lon_default = lon_guess if lon_guess is not None else (1 if len(cols) > 1 else 0)
+
+                        with st.popover("Select latitude / longitude columns"):
+                            st.caption("Pick which CSV columns contain coordinates.")
+                            lat_col = st.selectbox(
+                                "Latitude column", cols, index=lat_default, key="csv_lat_col"
+                            )
+                            lon_col = st.selectbox(
+                                "Longitude column", cols, index=lon_default, key="csv_lon_col"
+                            )
+                            crs_input = st.text_input(
+                                "Coordinate CRS (EPSG code)",
+                                value="EPSG:4326",
+                                key="csv_crs",
+                                help="Commonly EPSG:4326 for WGS84 latitude/longitude.",
+                            )
+
+                        lat_col = st.session_state.get("csv_lat_col", cols[lat_default])
+                        lon_col = st.session_state.get("csv_lon_col", cols[lon_default])
+                        crs_input = st.session_state.get("csv_crs", "EPSG:4326")
+
+                        if lat_col == lon_col:
+                            st.warning("Latitude and longitude columns must be different.")
+                        else:
+                            points_gdf = points_from_csv(df, lat_col, lon_col, crs_input)
+                            st.success(
+                                f"CSV loaded with {len(points_gdf)} valid point rows "
+                                f"(lat='{lat_col}', lon='{lon_col}', CRS={crs_input})."
+                            )
+                            preview_gdf(points_gdf, title="Points preview")
+            else:
+                points_gdf = read_vector_file(points_file)
+                st.success(f"Point layer loaded with {len(points_gdf)} features.")
+                preview_gdf(points_gdf, title="Points preview")
         except Exception as e:
             st.error(f"Error reading point file: {e}")
 
@@ -247,16 +348,12 @@ def main():
             try:
                 roads_gdf_tmp = read_vector_file(roads_file)
                 roads_gdf_tmp = roads_gdf_tmp[
-                    roads_gdf_tmp.geometry.geom_type.isin(
-                        ["LineString", "MultiLineString"]
-                    )
+                    roads_gdf_tmp.geometry.geom_type.isin(["LineString", "MultiLineString"])
                 ]
                 st.session_state["roads_gdf"] = roads_gdf_tmp
                 st.session_state["crs_metric"] = crs_metric_user
                 st.session_state["graph_data"] = None  # invalidate graph cache
-                st.success(
-                    f"Road layer loaded with {len(roads_gdf_tmp)} segments and stored."
-                )
+                st.success(f"Road layer loaded with {len(roads_gdf_tmp)} segments and stored.")
                 preview_gdf(roads_gdf_tmp, title="Roads preview")
             except Exception as e:
                 st.error(f"Error reading road file: {e}")
@@ -278,9 +375,7 @@ def main():
                     "nodes": len(G.nodes),
                     "edges": len(G.edges),
                 }
-                st.success(
-                    f"Graph built and cached ({len(G.nodes)} nodes, {len(G.edges)} edges)."
-                )
+                st.success(f"Graph built and cached ({len(G.nodes)} nodes, {len(G.edges)} edges).")
                 graph_data = st.session_state["graph_data"]
             except Exception as e:
                 st.error(f"Error building graph: {e}")
@@ -336,6 +431,7 @@ def main():
             help="Smaller -> more concave (tighter). Larger -> more convex. 0 = automatic.",
         )
         alpha_value = None if alpha_input == 0.0 else float(alpha_input)
+
     edge_width_m = None
     smooth_m = None
     if boundary_mode == "buffer":
@@ -353,9 +449,7 @@ def main():
         )
 
     try:
-        distances_m = sorted(
-            {int(x.strip()) for x in distances_text.split(",") if x.strip()}
-        )
+        distances_m = sorted({int(x.strip()) for x in distances_text.split(",") if x.strip()})
     except Exception:
         distances_m = []
         st.error("Could not parse distances. Please enter integers separated by commas.")

@@ -5,7 +5,7 @@ import streamlit as st
 def load_osm_roads(regions, crs_metric, network_type):
     """Load OSM road network for given regions."""
     st.write(f"Downloading OSM roads for regions: {regions}")
-    with st.spinner("Downloading OSM graph from OSM..."):
+    with st.spinner("Downloading graph from OSM... It may take a while."):
         G_osm = ox.graph_from_place(regions, network_type=network_type)
 
     st.write("Projecting OSM graph to metric CRS...")
