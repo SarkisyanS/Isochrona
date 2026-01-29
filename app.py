@@ -125,10 +125,14 @@ def inject_styles():
             opacity: 0.75;
         }
 
-        /* --- Sticky right map wrapper (anchor + next div trick) --- */
-        #map-sticky-anchor + div {
+        /* Right-hand map column sticks during left scroll */
+        .sticky-map-col {
             position: sticky;
-            top: 8px;
+            top: 10px;
+            align-self: flex-start;
+        }
+        /* Preserve card styling for the map panel */
+        #map-sticky-anchor + div {
             height: calc(100vh - 16px);
             padding: 12px;
             border: 1px solid #1f2937;
@@ -165,6 +169,21 @@ def inject_styles():
             height: 100% !important;
         }
         </style>
+        <script>
+        // Add sticky class to the column containing the map anchor
+        const stickIsoMapColumn = () => {
+          const anchor = document.getElementById("map-sticky-anchor");
+          if (!anchor) {
+            requestAnimationFrame(stickIsoMapColumn);
+            return;
+          }
+          const col = anchor.closest("div[data-testid='column']");
+          if (col && !col.classList.contains("sticky-map-col")) {
+            col.classList.add("sticky-map-col");
+          }
+        };
+        requestAnimationFrame(stickIsoMapColumn);
+        </script>
         """,
         unsafe_allow_html=True,
     )
